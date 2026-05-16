@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\aitan\Robotics\2026\MPC-Testing\native\build\CMakeFiles\be50c14090d5804a50be24c6c353cab7\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{B6D4A2A2-F006-3BC0-A285-0840CE9E09E3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\aitan\Robotics\2026\MPC-Testing\native\TinyMPCJNI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\aitan\Robotics\2026\MPC-Testing\native\generated_solver\tinympc\admm.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\aitan\Robotics\2026\MPC-Testing\native\generated_solver\tinympc\tiny_api.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\aitan\Robotics\2026\MPC-Testing\native\generated_solver\tinympc\rho_benchmark.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\aitan\Robotics\2026\MPC-Testing\native\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{D4AD6887-29CD-38B8-82D0-1A72271659E3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

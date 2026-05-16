@@ -1,0 +1,10 @@
+^C:\USERS\AITAN\ROBOTICS\2026\MPC-TESTING\NATIVE\BUILD\CMAKEFILES\BE50C14090D5804A50BE24C6C353CAB7\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/aitan/Robotics/2026/MPC-Testing/native -BC:/Users/aitan/Robotics/2026/MPC-Testing/native/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/aitan/Robotics/2026/MPC-Testing/native/build/tinympc_jni.slnx
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
