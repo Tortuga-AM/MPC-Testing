@@ -4,6 +4,8 @@
 
 package frc.robot;
 
+import java.util.concurrent.ForkJoinPool;
+
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
@@ -21,6 +23,7 @@ public class Robot extends TimedRobot {
    * initialization code.
    */
   public Robot() {
+    System.out.println(ForkJoinPool.commonPool().getPoolSize()); // Pre-initialize the common ForkJoinPool to avoid jank during operation
     DriverStation.silenceJoystickConnectionWarning(true);
   }
 

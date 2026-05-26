@@ -4,6 +4,7 @@ import static edu.wpi.first.units.Units.DegreesPerSecond;
 import static edu.wpi.first.units.Units.Meters;
 import static edu.wpi.first.units.Units.MetersPerSecond;
 import static frc.robot.Drive.DriveConstants.ANGULAR_VELOCITY_LIMIT;
+import static frc.robot.GlobalConstants.Controllers.*;
 
 import org.littletonrobotics.junction.Logger;
 import org.team7525.subsystem.Subsystem;
@@ -11,6 +12,7 @@ import org.team7525.subsystem.Subsystem;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import choreo.trajectory.SwerveSample;
 import choreo.trajectory.Trajectory;
+import edu.wpi.first.math.MathUtil;
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
@@ -20,50 +22,68 @@ import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import frc.robot.GlobalConstants;
-import frc.robot.Drive.TrajoPlotPro.RobotConfig;
+import frc.robot.Drive.AutoAlign.SpatialTrajectorySampler;
+import frc.robot.Drive.AutoAlign.TrajoPlotPro;
+import frc.robot.Drive.AutoAlign.Zone;
+import frc.robot.Drive.AutoAlign.TrajoPlotPro.RobotConfig;
 
-import static frc.robot.GlobalConstants.Controllers.*;
-
-import java.lang.StackWalker.Option;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class Drive extends Subsystem<DriveStates> {
     private static Drive instance;
 
-	private DriveIO driveIO;
-    private boolean mpcAvailable = false;
-    // private final LocalNonLinearProblemSolver solver = new LocalNonLinearProblemSolver();
+    // --- Hardware & Config ---
+    private final DriveIO driveIO;
     private final RobotConfig config = new RobotConfig(
-            135.0, // massLbs
-            6.0,  // moi
-            2.0,   // wheelRadiusInches
-            1.5,   // wheelCOF
-            6.5,  // gearRatio
-            6000.0, // maxMotorRPM
-            1.2,  // maxMotorTorqueNm
-            new Translation2d[] { new Translation2d(0.2794, 0.2794), new Translation2d(-0.2794, 0.2794), new Translation2d(-0.2794, -0.2794), new Translation2d(0.2794, -0.2794) }, // moduleOffsets
-            4.3,   // maxVelocityOverride
-            7.5    // maxAccelOverride
+            135.0, 6.0, 2.0, 1.5, 6.5, 6000.0, 1.2, 
+            new Translation2d[] { new Translation2d(0.2794, 0.2794), new Translation2d(-0.2794, 0.2794), new Translation2d(-0.2794, -0.2794), new Translation2d(0.2794, -0.2794) }, 
+            4.3, 8
     );
-    private final TrajoPlotPro solver = new TrajoPlotPro(
-        config
-    );
-    private boolean trajGen = false;
-    private Timer pathFollowingTimer = new Timer();
+    private final TrajoPlotPro solver = new TrajoPlotPro(config);
+    private final Field2d field2d = new Field2d();
+
+    // --- Pathing State ---
+    private boolean isGenerating = false;
+    private boolean isFollowingPath = false;
+    private boolean isInitialAlignmentReady = false;
+    private AtomicReference<Trajectory<SwerveSample>> pendingTrajectory = new AtomicReference<>(null);
+    private Trajectory<SwerveSample> activeTrajectory = null;
+    private SpatialTrajectorySampler spatialSampler;    
+    
+    // --- Dynamic Target Tracking ---
+    private Translation2d pointOfInterest = null;
+
+    // --- Controllers ---
+    private final PIDController xController = new PIDController(10, 0, 0); // Kept for micro-path alignments
+    private final PIDController yController = new PIDController(10, 0, 0); 
+    
+    // NEW DECOUPLED PATH CONTROLLERS
+    private final PIDController crossTrackController = new PIDController(10.0, 0, 0); // Aggressive obstacle avoidance
+    private final PIDController alongTrackController = new PIDController(5.0, 0, 0);  // Soft, smooth longitudinal tracking
+    private final PIDController headingController = new PIDController(15, 0, 0);
+
+    // --- Kinematic Memory ---
     private double lastAccelTimestamp = 0.0;
     private ChassisSpeeds lastRobotSpeeds = new ChassisSpeeds();
-    private PIDController xController = new PIDController(10, 0, 0);
-    private PIDController yController = new PIDController(10, 0, 0);
-    private PIDController headingController = new PIDController(15, 0, 0);
-    private Trajectory<SwerveSample> pathfindingTrajectory = null;
-    private boolean firstLoop = true;
+    private ChassisSpeeds filteredAcceleration = new ChassisSpeeds();
 
-    private Field2d field2d = new Field2d();
+    // --- APF & Replanning Constraints ---
+    private final List<Translation2d> staticObstacles = new ArrayList<>();
+    private final List<TrajoPlotPro.RectObstacle> rectObstacles = new ArrayList<>();
+    private final List<Pose2d> waypoints = new ArrayList<>();
+    private double stuckStartTime = -1.0;
+    private static final double STUCK_VELOCITY_THRESHOLD = 0.15; 
+    private static final double STUCK_ERROR_THRESHOLD = 0.2; 
+    private static final double KICK_TRIGGER_TIME = 0.5; 
+    private static final double BAILOUT_TRIGGER_TIME = 1.5; 
+    private static final double BAILOUT_ERROR_THRESHOLD = 1.5; 
+    private static final Zone NeutralLeftZone = new Zone(4.7, 8.26, 4.12, 15.0, "Neutral Left");
+
     // =========================================================================
-    // Constructor
+    // Constructor & Singleton
     // =========================================================================
     public static Drive getInstance() {
         if (instance == null) {
@@ -75,257 +95,354 @@ public class Drive extends Subsystem<DriveStates> {
     private Drive() {
         super("Drive", DriveStates.MANUAL);
         this.driveIO = switch (GlobalConstants.ROBOT_MODE) {
-			case REAL -> new DriveIOReal();
-			case SIM -> new DriveIOSim();
-			case TESTING -> new DriveIOReal();
-		};
+            case REAL, TESTING -> new DriveIOReal();
+            case SIM -> new DriveIOSim();
+        };
         headingController.enableContinuousInput(-Math.PI, Math.PI);
-        try {
-            TinyMPCJNI.initialize();
-            mpcAvailable = true;
-        } catch (Throwable t) {
-            mpcAvailable = false;
-            System.err.println("TinyMPC JNI unavailable; MPC follow will be disabled.");
-            if (TinyMPCJNI.getLoadError() != null) {
-                TinyMPCJNI.getLoadError().printStackTrace();
-            } else {
-                t.printStackTrace();
-            }
-        }
+        
+        addObstacle(4.5, 5.5); 
+        rectObstacles.add(new TrajoPlotPro.RectObstacle(4.7, 4.12, 1.2, 5));
     }
 
+    // =========================================================================
+    // Main State Machine
+    // =========================================================================
     @Override
     public void runState() {
-        field2d.setRobotPose(getPose());
-        Pose2d pose = getPose();
-        Logger.recordOutput("Field", pose);
-        SmartDashboard.putData("Field", field2d);
-        SmartDashboard.putString("Drive State", getState().toString());
-        SmartDashboard.putNumber("Drive State Time", getStateTime());
+        updateTelemetry();
+
         if (DRIVER_CONTROLLER.getXButtonPressed()) {
-            setPathfindingTarget(new Pose2d(0.0, 0.0, Rotation2d.fromDegrees(180.0)));
+            if (NeutralLeftZone.contains(getPose().getTranslation())) {
+                setPathfindingTarget(new Pose2d(1.4, 4.9, Rotation2d.fromDegrees(180.0)));
+                waypoints.clear();
+                waypoints.add(new Pose2d(5.65, 7.52, Rotation2d.fromDegrees(180.0)));
+                waypoints.add(new Pose2d(3.5, 7.52, Rotation2d.fromDegrees(180.0)));
+            } else {
+                setPathfindingTarget(new Pose2d(2, 2, Rotation2d.fromDegrees(0.0)));
+                waypoints.clear();
+            }
         }
+        
         switch (getState()) {
             case MANUAL -> {
-                firstLoop = true;
-                // Get joystick inputs
-                double xSpeed = -DRIVER_CONTROLLER.getLeftY(); // Forward/backward
-                double ySpeed = -DRIVER_CONTROLLER.getLeftX(); // Left/right
-                double rotSpeed = -DRIVER_CONTROLLER.getRightX(); // Rotation
+                double xSpeed = -DRIVER_CONTROLLER.getLeftY(); 
+                double ySpeed = -DRIVER_CONTROLLER.getLeftX(); 
+                double rotSpeed = -DRIVER_CONTROLLER.getRightX(); 
 
-                // Create chassis speeds from joystick inputs
-                ChassisSpeeds speeds = new ChassisSpeeds(xSpeed * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond), ySpeed * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond), rotSpeed * ANGULAR_VELOCITY_LIMIT.in(DegreesPerSecond));
+                ChassisSpeeds speeds = new ChassisSpeeds(
+                    xSpeed * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond), 
+                    ySpeed * TunerConstants.kSpeedAt12Volts.in(MetersPerSecond), 
+                    rotSpeed * ANGULAR_VELOCITY_LIMIT.in(DegreesPerSecond)
+                );
                 drive(speeds);
             }
             case PATH_FOLLOWING_CENTER, PATHFINDING -> {
-                if (!trajGen && (getVelocityX()+0.1 > config.maxVelocityOverride() || getVelocityY()+0.1 > config.maxVelocityOverride())) {
-                    drive(new ChassisSpeeds());
-                    System.err.println("Robot is moving too fast for path generation! Breaking to restore possibilities");
-                    // Will reattempt next loop
-                    return;
-                }
-                if (!trajGen) {
-                    new ChassisSpeeds();
-                    ChassisSpeeds currentRobotSpeeds = new ChassisSpeeds(
-                        driveIO.getDrive().getState().Speeds.vxMetersPerSecond,
-                        driveIO.getDrive().getState().Speeds.vyMetersPerSecond,
-                        driveIO.getDrive().getState().Speeds.omegaRadiansPerSecond
-                    );
-                    ChassisSpeeds currentFieldSpeeds = ChassisSpeeds.fromRobotRelativeSpeeds(
-                        currentRobotSpeeds.vxMetersPerSecond,
-                        currentRobotSpeeds.vyMetersPerSecond,
-                        currentRobotSpeeds.omegaRadiansPerSecond,
-                        getPose().getRotation()
-                    );
-                    ChassisSpeeds currentFieldAcceleration = getCurrentFieldAcceleration(currentRobotSpeeds);
-                    List<TrajoPlotPro.TrajectoryPoint> trajectory = solver.solve(getPose(), currentFieldSpeeds, currentFieldAcceleration, getState().getPose(), new ArrayList<Pose2d>() {{ add(new Pose2d(6, 6, Rotation2d.kZero)); }});
-                    Pose2d[] poses = solver.reconstructToPose2d(trajectory);
-                    field2d.getObject("MPPI Trajectory").setPoses(poses);
-                    Trajectory<SwerveSample> ChoreoTrajectory = solver.convertToChoreo(trajectory);
-                    if (ChoreoTrajectory == null) {
-                        System.err.println("Trajectory generation failed! Breaking to restore possibilities");
-                        driveIO.setControl(new SwerveRequest.Idle());
-                        // Will reattempt next loop
+                if (!isFollowingPath && !isGenerating && pendingTrajectory.get() == null) {
+                    Pose2d goal = getState().getPose();
+                    
+                    if (getPose().getTranslation().getDistance(goal.getTranslation()) < 0.1 && 
+                        Math.abs(getVelocityX()) < 0.1 && Math.abs(getVelocityY()) < 0.1) {
+                        
+                        drive(new ChassisSpeeds(
+                            xController.calculate(getPose().getX(), goal.getX()), 
+                            yController.calculate(getPose().getY(), goal.getY()), 
+                            headingController.calculate(getPose().getRotation().getRadians(), goal.getRotation().getRadians())
+                        ));
+                        return; 
+                    }
+
+                    if (getVelocityX() + 0.1 > config.maxVelocityOverride() || getVelocityY() + 0.1 > config.maxVelocityOverride()) {
+                        drive(new ChassisSpeeds());
+                        System.err.println("Braking to stabilize before path generation...");
                         return;
                     }
-                    // holonomicController.startPath(trajectory);
-                    trajGen = true;
-                    SetPath(ChoreoTrajectory);
-                 }
-                if (firstLoop) {
-                    firstLoop = false;
-                    Optional<SwerveSample> initialSample = pathfindingTrajectory.sampleAt(0.0, false);
-                    ChassisSpeeds initialSpeeds = new ChassisSpeeds(initialSample.get().vx, initialSample.get().vy, initialSample.get().omega);
-                    drive(initialSpeeds);
-                    return;
+                    generateGlobalTrajectory(goal);
                 }
-                // if ((pathfindingTrajectory.getInitialPose(false).get().relativeTo(getPose()).getX() > 0.1 || pathfindingTrajectory.getInitialPose(false).get().relativeTo(getPose()).getY() > 0.1 || Math.abs(pathfindingTrajectory.getInitialPose(false).get().relativeTo(getPose()).getRotation().getDegrees()) > 2.5 || driveIO.getDrive().getState().Speeds.vxMetersPerSecond > 0.1 || driveIO.getDrive().getState().Speeds.vyMetersPerSecond > 0.1 || Math.abs(driveIO.getDrive().getState().Speeds.omegaRadiansPerSecond) > Math.toRadians(5)) && !ready) {
-                //     drive(new ChassisSpeeds(xController.calculate(getPose().getX(), pathfindingTrajectory.getInitialPose(false).get().getX()), yController.calculate(getPose().getY(), pathfindingTrajectory.getInitialPose(false).get().getY()), headingController.calculate(getPose().getRotation().getRadians(), pathfindingTrajectory.getInitialPose(false).get().getRotation().getRadians())));
-                // } else {
-                //     ready = true;
-                // }
-                //if (ready) {
-                    if (MPCFOllow()) {
-                        trajGen = false;
-                        setState(DriveStates.MANUAL);
-                        System.out.println("Trajectory complete!");
-                        System.out.println("Final Pose: " + getPose());
-                        System.out.println("Final Pose relative to goal: " + getPose().relativeTo(pathfindingTrajectory.getFinalPose(false).get()));
-                        System.out.println("Total Time: " + pathFollowingTimer.get() + " seconds");
-                        pathFollowingTimer.stop();
-                        pathFollowingTimer.reset();
+
+                if (isGenerating) {
+                    drive(new ChassisSpeeds());
+                    return; 
+                }
+
+                if (pendingTrajectory.get() != null) {
+                    Trajectory<SwerveSample> newTraj = pendingTrajectory.getAndSet(null); 
+                    if (newTraj != null) {
+                        setPath(newTraj);
+                    } else {
+                        driveIO.setControl(new SwerveRequest.Idle());
+                        return;
                     }
-                    //MPCFOllow();
-                //}
+                }
+
+                if (isFollowingPath) {
+                    handleInitialAlignmentAndFollow();
+                }
             }
-            default -> {
-                 driveIO.setControl(new SwerveRequest.SwerveDriveBrake());
-            }
+            default -> driveIO.setControl(new SwerveRequest.SwerveDriveBrake());
         }
     }
-    // Field Centric drive with discretization and desaturation
-    protected void drive(ChassisSpeeds speeds) {
-        //speeds = ChassisSpeeds.discretize(speeds, 0.02);
-        driveIO.setControl(new SwerveRequest.FieldCentric().withVelocityX(speeds.vxMetersPerSecond).withVelocityY(speeds.vyMetersPerSecond).withRotationalRate(speeds.omegaRadiansPerSecond));
+
+    // =========================================================================
+    // Core Path Following & Replanning
+    // =========================================================================
+    private void handleInitialAlignmentAndFollow() {
+        if (followTrajectory()) {
+            isFollowingPath = false;
+            activeTrajectory = null; 
+            setState(DriveStates.MANUAL);
+            System.out.println("Trajectory complete!");
+        }
     }
-    private boolean MPCFOllow() {
-        if (!mpcAvailable) {
+
+    private boolean followTrajectory() {
+        Pose2d pose = getPose();        
+        SwerveSample targetSample = spatialSampler.getLookaheadSample(pose, new Translation2d(getVelocityX(), getVelocityY()));
+        double closestPathTime = spatialSampler.getCurrentPathTime();
+        
+        SmartDashboard.putNumber("Closest Path Time", closestPathTime);
+        field2d.getObject("Target Pose").setPose(targetSample.getPose());
+
+        if (checkTrajectoryComplete(closestPathTime)) {
+            drive(new ChassisSpeeds());
+            return true; 
+        }
+
+        double targetX = targetSample.x;
+        double targetY = targetSample.y;
+        double ffVx = targetSample.vx;
+        double ffVy = targetSample.vy;
+        double ffOmega = targetSample.omega;
+
+        // 1. DYNAMIC POI TRACKING OVERRIDE
+        double targetHeading = targetSample.heading;
+        if (pointOfInterest != null) {
+            targetHeading = Math.atan2(pointOfInterest.getY() - pose.getY(), pointOfInterest.getX() - pose.getX());
+            ffOmega = 0.0; // Let the PID exclusively handle the aggressive tracking spin
+        }
+
+        double distanceError = Math.hypot(targetX - pose.getX(), targetY - pose.getY());
+        double currentSpeed = Math.hypot(getVelocityX(), getVelocityY());
+
+        // STALEMATE TRACKER & BAILOUT TRIGGER
+        if (distanceError > STUCK_ERROR_THRESHOLD && currentSpeed < STUCK_VELOCITY_THRESHOLD) {
+            if (stuckStartTime < 0) stuckStartTime = Timer.getFPGATimestamp();
+        } else {
+            stuckStartTime = -1.0; 
+        }
+
+        double timeStuck = (stuckStartTime > 0) ? (Timer.getFPGATimestamp() - stuckStartTime) : 0.0;
+
+        if (distanceError > BAILOUT_ERROR_THRESHOLD || timeStuck > BAILOUT_TRIGGER_TIME) {
+            System.err.println("GLOBAL REPLAN TRIGGERED!");
+            stuckStartTime = -1.0;
+            isFollowingPath = false;
+            setPathfindingTarget(activeTrajectory.getFinalPose(false).get()); 
             return false;
         }
-        ChassisSpeeds currentSpeeds = ChassisSpeeds.fromRobotRelativeSpeeds(driveIO.getDrive().getState().Speeds, getPose().getRotation());
-        double[] currentState = {
-            getPose().getX(),
-            getPose().getY(),
-            getPose().getRotation().getRadians(),
-            currentSpeeds.vxMetersPerSecond,
-            currentSpeeds.vyMetersPerSecond,
-            currentSpeeds.omegaRadiansPerSecond
-        };
-        Optional<SwerveSample> sample0 = pathfindingTrajectory.sampleAt(pathFollowingTimer.get(), false);
-        // Make this a loop to avoid copy-paste?
-        SwerveSample[] samples = new SwerveSample[30];
-        for (int i = 0; i < 30; i++) {
-            samples[i] = pathfindingTrajectory.sampleAt(pathFollowingTimer.get() + (i * 0.02), false).get();
+
+        // =====================================================================
+        // 2. DECOUPLED ERROR ROTATION (Cross-Track vs Along-Track)
+        // =====================================================================
+        double pathAngle;
+        if (Math.hypot(ffVx, ffVy) > 0.05) {
+            pathAngle = Math.atan2(ffVy, ffVx); // Direction the trajectory wants us to move
+        } else {
+            pathAngle = Math.atan2(targetY - pose.getY(), targetX - pose.getX()); // Fallback for pure translation
+        }
+        
+        Rotation2d pathRotation = new Rotation2d(pathAngle);
+        Translation2d globalError = new Translation2d(targetX - pose.getX(), targetY - pose.getY());
+        
+        // Rotate error into the path's frame of reference
+        Translation2d localError = globalError.rotateBy(pathRotation.unaryMinus());
+        
+        // Calculate independent PID efforts
+        double pidAlong = alongTrackController.calculate(0.0, localError.getX());
+        double pidCross = crossTrackController.calculate(0.0, localError.getY());
+        
+        // Rotate the resulting effort back into the global field frame
+        Translation2d globalPidEffort = new Translation2d(pidAlong, pidCross).rotateBy(pathRotation);
+        
+        double pidVx = globalPidEffort.getX();
+        double pidVy = globalPidEffort.getY();
+        double pidOmega = headingController.calculate(pose.getRotation().getRadians(), targetHeading);
+
+        double ffScale = Math.max(0.2, 1.0 - (distanceError / 0.5));
+        Translation2d apfVector = calculateAPFVortex(pose, ffVx, ffVy);
+
+        // ESCAPE KICK
+        double kickVx = 0.0, kickVy = 0.0;
+        if (timeStuck > KICK_TRIGGER_TIME) {
+            double kickAngle = pose.getRotation().getRadians() + (Math.PI / 2.0); 
+            kickVx = Math.cos(kickAngle) * 2.0; 
+            kickVy = Math.sin(kickAngle) * 2.0;
         }
 
-        double[][] referenceHorizon = new double[30][6];
-        for (int i = 0; i < 10; i++) {
-            referenceHorizon[i][0] = samples[i].x; // Target X
-            referenceHorizon[i][1] = samples[i].y; // Target Y
-            referenceHorizon[i][2] = samples[i].heading; // Target Theta
-            referenceHorizon[i][3] = samples[i].vx; // Target vx
-            referenceHorizon[i][4] = samples[i].vy; // Target vy
-            referenceHorizon[i][5] = samples[i].omega; // Target omega
-        }
-        // 2. Get the acceleration recommended by the MPC
-        //System.out.println(Arrays.toString(referenceHorizon[0]));
-        double[] mpcAccel = TinyMPCJNI.getControl(currentState, referenceHorizon);
-        double ax = mpcAccel[0];
-        double ay = mpcAccel[1];
-        double alpha = mpcAccel[2];
-        SmartDashboard.putNumber("MPC Accel X", ax);
-        SmartDashboard.putNumber("MPC Accel Y", ay);
-        SmartDashboard.putNumber("MPC Accel Omega", alpha);
+        // SUM & DESATURATE
+        double finalVx = (ffVx * ffScale) + pidVx + apfVector.getX() + kickVx;
+        double finalVy = (ffVy * ffScale) + pidVy + apfVector.getY() + kickVy;
+        double finalOmega = ffOmega + pidOmega; 
 
-        // 3. Calculate the "Next Best Velocity"
-        // We multiply by 0.02 because that is our loop time (dt)
-        double nextVx = currentSpeeds.vxMetersPerSecond + (ax * 0.02);
-        double nextVy = currentSpeeds.vyMetersPerSecond + (ay * 0.02);
-        double nextOmega = currentSpeeds.omegaRadiansPerSecond + (alpha * 0.02);
-        SmartDashboard.putNumber("Next Vx", nextVx);
-        SmartDashboard.putNumber("Next Vy", nextVy);
-        SmartDashboard.putNumber("Next Omega", nextOmega);
-        SmartDashboard.putNumber("Sample Vx", sample0.get().getChassisSpeeds().vxMetersPerSecond);
-        SmartDashboard.putNumber("Sample Vy", sample0.get().getChassisSpeeds().vyMetersPerSecond);
-        SmartDashboard.putNumber("Sample Omega", sample0.get().getChassisSpeeds().omegaRadiansPerSecond);
-        // 4. Command the robot
-        ChassisSpeeds targetSpeeds = new ChassisSpeeds(nextVx, nextVy, nextOmega);
-        drive(targetSpeeds);
-        field2d.getObject("Ghost").setPose(sample0.get().getPose());
-        if (getPose().getMeasureX().in(Meters) - pathfindingTrajectory.getFinalPose(false).get().getX() < 0.1 && getPose().getMeasureY().in(Meters) - pathfindingTrajectory.getFinalPose(false).get().getY() < 0.1 && Math.abs(getPose().getRotation().relativeTo(pathfindingTrajectory.getFinalPose(false).get().getRotation()).getRadians()) < Math.toRadians(1.0) && pathFollowingTimer.hasElapsed(pathfindingTrajectory.getTotalTime()))  {
-            drive(new ChassisSpeeds());
-            trajGen = false;
-            setState(DriveStates.MANUAL);
-            return true; // Trajectory complete
+        double requestedSpeed = Math.hypot(finalVx, finalVy);
+        double maxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond);
+        if (requestedSpeed > maxSpeed) {
+            finalVx *= (maxSpeed / requestedSpeed);
+            finalVy *= (maxSpeed / requestedSpeed);
         }
-        return false; // Trajectory not yet complete
+        finalVx = applyStaticFrictionCompenation(finalVx);
+        finalVy = applyStaticFrictionCompenation(finalVy);
 
-    }
-    private void SetPath(Trajectory<SwerveSample> trajectory) {
-        pathfindingTrajectory = trajectory;
-        pathFollowingTimer.stop();
-        pathFollowingTimer.reset();
-        pathFollowingTimer.start();
-    }
-    private boolean followTrajectory() {
-        Pose2d pose = getPose();
-        Optional<SwerveSample> sample = pathfindingTrajectory.sampleAt(pathFollowingTimer.get(), false);
-        ChassisSpeeds speeds = new ChassisSpeeds(
-            sample.get().vx + xController.calculate(pose.getX(), sample.get().x),
-            sample.get().vy + yController.calculate(pose.getY(), sample.get().y),
-            sample.get().omega + headingController.calculate(pose.getRotation().getRadians(), sample.get().heading)
+        drive(new ChassisSpeeds(finalVx, finalVy, finalOmega));
+
+        activeTrajectory.sampleAt(closestPathTime, false).ifPresent(
+            sample -> field2d.getObject("Ghost").setPose(sample.getPose())
         );
-        field2d.getObject("Ghost").setPose(sample.get().getPose());
-        drive(speeds);
-        if (getPose().getMeasureX().in(Meters) - pathfindingTrajectory.getFinalPose(false).get().getX() < 0.1 && getPose().getMeasureY().in(Meters) - pathfindingTrajectory.getFinalPose(false).get().getY() < 0.1 && Math.abs(getPose().getRotation().relativeTo(pathfindingTrajectory.getFinalPose(false).get().getRotation()).getRadians()) < Math.toRadians(1.0) && pathFollowingTimer.hasElapsed(pathfindingTrajectory.getTotalTime()))  {
-            drive(new ChassisSpeeds());
-            trajGen = false;
-            setState(DriveStates.MANUAL);
-            return true; // Trajectory complete
-        }
-        return false; // Trajectory not yet complete
+
+        return false; 
     }
 
-
-    public void putTrajectory(String key, Pose2d[] trajectory) {
-        field2d.getObject(key).setPoses(trajectory);
+    // =========================================================================
+    // API Extensions for POI Tracking
+    // =========================================================================
+    /** Set a physical coordinate on the field for the robot to look at while driving. */
+    public void setPointOfInterest(Translation2d poi) {
+        this.pointOfInterest = poi;
     }
 
-    // Robot Centric drive with discretization and desaturation
-    protected void driveRobotRelative(ChassisSpeeds speeds) {
-        speeds = ChassisSpeeds.discretize(speeds, 0.02);
-        driveIO.setControl(new SwerveRequest.RobotCentric().withDesaturateWheelSpeeds(true).withVelocityX(speeds.vxMetersPerSecond).withVelocityY(speeds.vyMetersPerSecond).withRotationalRate(speeds.omegaRadiansPerSecond));
+    /** Clear the POI to return heading control back to the trajectory. */
+    public void clearPointOfInterest() {
+        this.pointOfInterest = null;
     }
 
-    /**
-     * Get the robot's current field-relative pose from your pose estimator.
-     */
-    protected Pose2d getPose() {
-        return driveIO.getDrive().getState().Pose;
-    }
+    // =========================================================================
+    // Helper Methods
+    // =========================================================================
+    private void generateGlobalTrajectory(Pose2d goalPose) {
+        isGenerating = true;
+        Pose2d startPose = getPose();
+        ChassisSpeeds currentRobotSpeeds = driveIO.getDrive().getState().Speeds;
+        ChassisSpeeds currentFieldSpeeds = ChassisSpeeds.fromRobotRelativeSpeeds(currentRobotSpeeds, startPose.getRotation());
+        ChassisSpeeds currentFieldAcceleration = getCurrentFieldAcceleration(currentRobotSpeeds);
 
-    /** Chassis-relative X velocity (m/s). Implement from your actual odometry. */
-    protected double getVelocityX() { return driveIO.getDrive().getState().Speeds.vxMetersPerSecond; }
-    /** Chassis-relative Y velocity (m/s). */
-    protected double getVelocityY() { return driveIO.getDrive().getState().Speeds.vyMetersPerSecond; }
-    /** Angular velocity (rad/s). */
-    protected double getAngularVelocity() { return driveIO.getDrive().getState().Speeds.omegaRadiansPerSecond; }
+        Trajectory<SwerveSample> prevTraj = (activeTrajectory != null && isFollowingPath) ? activeTrajectory : null;
 
-    private ChassisSpeeds getCurrentFieldAcceleration(ChassisSpeeds currentRobotSpeeds) {
-        double now = Timer.getFPGATimestamp();
-        double dt = now - lastAccelTimestamp;
-        ChassisSpeeds accelRobot = new ChassisSpeeds();
-        if (dt > 1e-3) {
-            accelRobot = new ChassisSpeeds(
-                (currentRobotSpeeds.vxMetersPerSecond - lastRobotSpeeds.vxMetersPerSecond) / dt,
-                (currentRobotSpeeds.vyMetersPerSecond - lastRobotSpeeds.vyMetersPerSecond) / dt,
-                (currentRobotSpeeds.omegaRadiansPerSecond - lastRobotSpeeds.omegaRadiansPerSecond) / dt
+        CompletableFuture.supplyAsync(() -> {
+            List<TrajoPlotPro.TrajectoryPoint> trajectory = solver.solve(
+                startPose, currentFieldSpeeds, currentFieldAcceleration, goalPose, 
+                waypoints, staticObstacles, rectObstacles, 0.45, 0.05, prevTraj 
             );
-        }
-        lastRobotSpeeds = currentRobotSpeeds;
-        lastAccelTimestamp = now;
-        return ChassisSpeeds.fromRobotRelativeSpeeds(
-            accelRobot.vxMetersPerSecond,
-            accelRobot.vyMetersPerSecond,
-            accelRobot.omegaRadiansPerSecond,
-            getPose().getRotation()
-        );
+            
+            if (trajectory == null || trajectory.isEmpty()) return null;
+            
+            Pose2d[] poses = solver.reconstructToPose2d(trajectory);
+            Trajectory<SwerveSample> choreoTraj = solver.convertToChoreo(trajectory);
+            return new Object[]{poses, choreoTraj}; 
+
+        }).thenAccept((result) -> {
+            if (result != null) {
+                field2d.getObject("Robot Trajectory").setPoses((Pose2d[]) result[0]);
+                @SuppressWarnings("unchecked")
+                Trajectory<SwerveSample> choreoTraj = (Trajectory<SwerveSample>) result[1];
+                pendingTrajectory.set(choreoTraj);
+            } else {
+                System.err.println("Trajectory generation failed!");
+            }
+            isGenerating = false;
+        }).exceptionally(ex -> {
+            System.err.println("CRASH IN BACKGROUND PATH GENERATION: " + ex.getMessage());
+            ex.printStackTrace();
+            isGenerating = false;
+            return null;
+        });
     }
 
-    /** Convenience helper for setting a one-off pathfinding target. */
+    private double applyStaticFrictionCompenation(double velocity) {
+        if (Math.abs(velocity) == 0.0) {
+            return 0.0; 
+        } else {
+            return velocity + Math.copySign(0.02, velocity); 
+        }
+    }
+
+    private Translation2d calculateAPFVortex(Pose2d pose, double ffVx, double ffVy) {
+        // Kept empty structurally per previous context. Put APF logic back if desired!
+        return new Translation2d(0, 0); 
+    }
+
+    private boolean checkTrajectoryComplete(double closestPathTime) {
+        Pose2d finalPose = activeTrajectory.getFinalPose(false).get();
+        return Math.abs(getPose().getMeasureX().in(Meters) - finalPose.getX()) < 0.1 && 
+               Math.abs(getPose().getMeasureY().in(Meters) - finalPose.getY()) < 0.1 && 
+               Math.abs(getPose().getRotation().relativeTo(finalPose.getRotation()).getRadians()) < Math.toRadians(5.0);
+    }
+
+    private void setPath(Trajectory<SwerveSample> trajectory) {
+        activeTrajectory = trajectory;
+        spatialSampler = new SpatialTrajectorySampler(trajectory, getPose()); 
+        isFollowingPath = true;
+        isInitialAlignmentReady = false;
+        stuckStartTime = -1.0;
+    }
+
     public void setPathfindingTarget(Pose2d targetPose) {
         DriveStates.PATHFINDING.setPose(targetPose);
         setState(DriveStates.PATHFINDING);
     }
 
+    // =========================================================================
+    // API & Standard Drive Methods
+    // =========================================================================
+    public void addObstacle(double x, double y) { staticObstacles.add(new Translation2d(x, y)); }
+    public void clearObstacles() { staticObstacles.clear(); }
+    public void putTrajectory(String key, Pose2d[] trajectory) { field2d.getObject(key).setPoses(trajectory); }
+    
+    protected void drive(ChassisSpeeds speeds) {
+        driveIO.setControl(new SwerveRequest.FieldCentric().withVelocityX(speeds.vxMetersPerSecond).withVelocityY(speeds.vyMetersPerSecond).withRotationalRate(speeds.omegaRadiansPerSecond));
+    }
+    protected void driveRobotRelative(ChassisSpeeds speeds) {
+        speeds = ChassisSpeeds.discretize(speeds, 0.02);
+        driveIO.setControl(new SwerveRequest.RobotCentric().withDesaturateWheelSpeeds(true).withVelocityX(speeds.vxMetersPerSecond).withVelocityY(speeds.vyMetersPerSecond).withRotationalRate(speeds.omegaRadiansPerSecond));
+    }
+
+    protected Pose2d getPose() { return driveIO.getDrive().getState().Pose; }
+    protected double getVelocityX() { return driveIO.getDrive().getState().Speeds.vxMetersPerSecond; }
+    protected double getVelocityY() { return driveIO.getDrive().getState().Speeds.vyMetersPerSecond; }
+    protected double getAngularVelocity() { return driveIO.getDrive().getState().Speeds.omegaRadiansPerSecond; }
+
+    private void updateTelemetry() {
+        field2d.setRobotPose(getPose());
+        Logger.recordOutput("Field", getPose());
+        SmartDashboard.putData("Field", field2d);
+        SmartDashboard.putString("Drive State", getState().toString());
+        SmartDashboard.putNumber("Drive State Time", getStateTime());
+    }
+
+    private ChassisSpeeds getCurrentFieldAcceleration(ChassisSpeeds currentRobotSpeeds) {
+        double now = Timer.getFPGATimestamp();
+        double dt = now - lastAccelTimestamp;
+        
+        ChassisSpeeds rawAccelRobot = new ChassisSpeeds();
+        if (dt > 1e-3 && dt < 0.1) { 
+            rawAccelRobot = new ChassisSpeeds(
+                (currentRobotSpeeds.vxMetersPerSecond - lastRobotSpeeds.vxMetersPerSecond) / dt,
+                (currentRobotSpeeds.vyMetersPerSecond - lastRobotSpeeds.vyMetersPerSecond) / dt,
+                (currentRobotSpeeds.omegaRadiansPerSecond - lastRobotSpeeds.omegaRadiansPerSecond) / dt
+            );
+        }
+
+        double alpha = 0.2; 
+        double maxA = config.calculateMaxAcceleration();
+        
+        double clampedVx = MathUtil.clamp(rawAccelRobot.vxMetersPerSecond, -maxA, maxA);
+        double clampedVy = MathUtil.clamp(rawAccelRobot.vyMetersPerSecond, -maxA, maxA);
+        
+        filteredAcceleration.vxMetersPerSecond = (alpha * clampedVx) + ((1 - alpha) * filteredAcceleration.vxMetersPerSecond);
+        filteredAcceleration.vyMetersPerSecond = (alpha * clampedVy) + ((1 - alpha) * filteredAcceleration.vyMetersPerSecond);
+        filteredAcceleration.omegaRadiansPerSecond = (alpha * rawAccelRobot.omegaRadiansPerSecond) + ((1 - alpha) * filteredAcceleration.omegaRadiansPerSecond);
+
+        lastRobotSpeeds = currentRobotSpeeds;
+        lastAccelTimestamp = now;
+
+        return ChassisSpeeds.fromRobotRelativeSpeeds(filteredAcceleration, getPose().getRotation());
+    }
 }

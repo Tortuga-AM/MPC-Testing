@@ -1,3 +1,0 @@
-C:/Users/aitan/Robotics/2026/MPC-Testing/native/build/CMakeFiles/tinympc_jni.dir
-C:/Users/aitan/Robotics/2026/MPC-Testing/native/build/CMakeFiles/ALL_BUILD.dir
-C:/Users/aitan/Robotics/2026/MPC-Testing/native/build/CMakeFiles/ZERO_CHECK.dir

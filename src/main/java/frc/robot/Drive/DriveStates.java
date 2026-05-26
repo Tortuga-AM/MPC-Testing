@@ -12,7 +12,7 @@ public enum DriveStates implements SubsystemStates {
         4.115,
         Rotation2d.fromDegrees(180)
     ), true),
-    PATHFINDING("Pathfinding", Pose2d.kZero, true),;
+    PATHFINDING("Pathfinding", new Pose2d(2, 2, Rotation2d.kZero), true),;
 
     private final String stateString;
     private final boolean pathfindingEnabled;
