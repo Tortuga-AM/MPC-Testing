@@ -6,13 +6,7 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 
 public enum DriveStates implements SubsystemStates {
-    MANUAL("Manual", Pose2d.kZero, false),
-    PATH_FOLLOWING_CENTER("Path Following Center", new Pose2d(
-        8.283,
-        4.115,
-        Rotation2d.fromDegrees(180)
-    ), true),
-    PATHFINDING("Pathfinding", new Pose2d(2, 2, Rotation2d.kZero), true),;
+    MANUAL("Manual", Pose2d.kZero, false);
 
     private final String stateString;
     private final boolean pathfindingEnabled;
