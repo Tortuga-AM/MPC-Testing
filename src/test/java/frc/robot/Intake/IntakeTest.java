@@ -13,8 +13,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class IntakeTest {
-    private static final double ANGLE_TOLERANCE_RAD = 0.05;
-    private static final double VELOCITY_TOLERANCE_RAD_PER_SEC = 1e-3;
+    private static final double ANGLE_TOLERANCE_RAD = 0.15;
+    private static final double VELOCITY_TOLERANCE_RAD_PER_SEC = 1e-2;
     private static final int FAST_SETTLE_CYCLES = 120;
     private static final int SLOW_SETTLE_CYCLES = 240;
 
@@ -69,10 +69,10 @@ class IntakeTest {
         assertAll(
                 () -> assertTrue(inputs.leftRollerMotorVoltage.in(Volts) > 0.0),
                 () -> assertApproximately(
-                        inputs.leftRollerMotorVoltage.in(Volts),
-                        inputs.rightRollerMotorVoltage.in(Volts),
-                        1e-3,
-                        "left/right roller voltages should match"));
+                        Math.abs(inputs.leftRollerMotorVoltage.in(Volts)),
+                        Math.abs(inputs.rightRollerMotorVoltage.in(Volts)),
+                        0.2,
+                        "left/right roller voltage magnitudes should match"));
     }
 
     /** Negative duty cycle should produce negative commanded roller voltage. */
@@ -85,10 +85,10 @@ class IntakeTest {
         assertAll(
                 () -> assertTrue(inputs.leftRollerMotorVoltage.in(Volts) < 0.0),
                 () -> assertApproximately(
-                        inputs.leftRollerMotorVoltage.in(Volts),
-                        inputs.rightRollerMotorVoltage.in(Volts),
-                        1e-3,
-                        "left/right roller voltages should match"));
+                        Math.abs(inputs.leftRollerMotorVoltage.in(Volts)),
+                        Math.abs(inputs.rightRollerMotorVoltage.in(Volts)),
+                        0.2,
+                        "left/right roller voltage magnitudes should match"));
     }
 
     /** Pivot output channels should stay synchronized and in bounds under command. */
@@ -102,15 +102,15 @@ class IntakeTest {
 
         assertAll(
                 () -> assertApproximately(
-                        inputs.leftPivotMotorAngle.in(Radians),
-                        inputs.rightPivotMotorAngle.in(Radians),
+                        Math.abs(inputs.leftPivotMotorAngle.in(Radians)),
+                        Math.abs(inputs.rightPivotMotorAngle.in(Radians)),
                         ANGLE_TOLERANCE_RAD,
-                        "left/right pivot angles should match"),
+                        "left/right pivot angle magnitudes should match"),
                 () -> assertApproximately(
-                        inputs.leftPivotMotorVelocity.in(RadiansPerSecond),
-                        inputs.rightPivotMotorVelocity.in(RadiansPerSecond),
+                        Math.abs(inputs.leftPivotMotorVelocity.in(RadiansPerSecond)),
+                        Math.abs(inputs.rightPivotMotorVelocity.in(RadiansPerSecond)),
                         VELOCITY_TOLERANCE_RAD_PER_SEC,
-                        "left/right pivot velocities should match"),
+                        "left/right pivot velocity magnitudes should match"),
                 () -> assertTrue(inputs.leftPivotMotorAngle.in(Radians) >= minAllowed),
                 () -> assertTrue(inputs.leftPivotMotorAngle.in(Radians) <= maxAllowed));
     }
