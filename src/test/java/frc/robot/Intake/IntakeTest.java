@@ -5,6 +5,7 @@ import static edu.wpi.first.units.Units.Radians;
 import static edu.wpi.first.units.Units.RadiansPerSecond;
 import static edu.wpi.first.units.Units.Volts;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import edu.wpi.first.hal.HAL;
@@ -28,7 +29,9 @@ class IntakeTest {
     /** Ensures sensor outputs remain symmetric and bounded before any command is issued. */
     @Test
     void initialSimulationStateIsSymmetricAndWithinPhysicalLimits() {
-        IntakeIOInputsAutoLogged inputs = runSimCycles(5);
+        IntakeIO.IntakeIOInputs inputs = runSimCycles(5);
+        double minAngle = IntakeConstants.PhysicalConstants.PIVOT_MIN_ANGLE.in(Radians);
+        double maxAngle = IntakeConstants.PhysicalConstants.PIVOT_MAX_ANGLE.in(Radians);
 
         assertAll(
                 () -> assertApproximately(
@@ -48,10 +51,12 @@ class IntakeTest {
                         "roller velocities should match"),
                 () -> assertTrue(
                         inputs.leftPivotMotorAngle.in(Radians)
-                                >= IntakeConstants.PhysicalConstants.PIVOT_MIN_ANGLE.in(Radians)),
+                                >= minAngle - ANGLE_TOLERANCE_RAD,
+                        "initial angle below min bound tolerance"),
                 () -> assertTrue(
                         inputs.leftPivotMotorAngle.in(Radians)
-                                <= IntakeConstants.PhysicalConstants.PIVOT_MAX_ANGLE.in(Radians)));
+                                <= maxAngle + ANGLE_TOLERANCE_RAD,
+                        "initial angle above max bound tolerance"));
     }
 
     /** Positive duty cycle should produce positive roller velocity after simulation settles. */
@@ -59,7 +64,7 @@ class IntakeTest {
     void positiveRollerCommandProducesPositiveVelocity() {
         intakeIO.setRollerMotorDutyCycle(0.65);
 
-        IntakeIOInputsAutoLogged inputs = runSimCycles(FAST_SETTLE_CYCLES);
+        IntakeIO.IntakeIOInputs inputs = runSimCycles(FAST_SETTLE_CYCLES);
 
         assertAll(
                 () -> assertTrue(inputs.leftRollerMotorVelocity.in(RadiansPerSecond) > 0.0),
@@ -75,7 +80,7 @@ class IntakeTest {
     void negativeRollerCommandProducesNegativeVelocity() {
         intakeIO.setRollerMotorDutyCycle(-0.45);
 
-        IntakeIOInputsAutoLogged inputs = runSimCycles(FAST_SETTLE_CYCLES);
+        IntakeIO.IntakeIOInputs inputs = runSimCycles(FAST_SETTLE_CYCLES);
 
         assertAll(
                 () -> assertTrue(inputs.leftRollerMotorVelocity.in(RadiansPerSecond) < 0.0),
@@ -89,20 +94,25 @@ class IntakeTest {
     /** Pivot command should move toward setpoint while respecting configured limits. */
     @Test
     void pivotMovesTowardCommandedSetpoint() {
-        double initialRadians = runSimCycles(1).leftPivotMotorAngle.in(Radians);
+        IntakeIO.IntakeIOInputs initialInputs = runSimCycles(1);
+        double initialRadians = initialInputs.leftPivotMotorAngle.in(Radians);
         double targetRadians = Degrees.of(70.0).in(Radians);
+        double initialError = Math.abs(targetRadians - initialRadians);
         intakeIO.setPivotMotorPosition(Degrees.of(70.0));
 
-        IntakeIOInputsAutoLogged inputs = runSimCycles(SLOW_SETTLE_CYCLES);
+        IntakeIO.IntakeIOInputs inputs = runSimCycles(SLOW_SETTLE_CYCLES);
+        double finalRadians = inputs.leftPivotMotorAngle.in(Radians);
+        double finalError = Math.abs(targetRadians - finalRadians);
 
         assertAll(
                 () -> assertTrue(
-                        inputs.leftPivotMotorAngle.in(Radians) > initialRadians + ANGLE_TOLERANCE_RAD),
+                        finalError < initialError,
+                        "pivot should get closer to target than initial state"),
                 () -> assertTrue(
-                        inputs.leftPivotMotorAngle.in(Radians)
+                        finalRadians
                                 <= IntakeConstants.PhysicalConstants.PIVOT_MAX_ANGLE.in(Radians)),
                 () -> assertApproximately(
-                        inputs.leftPivotMotorAngle.in(Radians),
+                        finalRadians,
                         targetRadians,
                         0.35,
                         "pivot should approach target angle"),
@@ -118,12 +128,12 @@ class IntakeTest {
     void pivotPositionRespectsPhysicalLimitsInSimulation() {
         intakeIO.setPivotMotorPosition(Degrees.of(200.0));
 
-        IntakeIOInputsAutoLogged highInputs = runSimCycles(SLOW_SETTLE_CYCLES);
+        IntakeIO.IntakeIOInputs highInputs = runSimCycles(SLOW_SETTLE_CYCLES);
         double maxAllowed = IntakeConstants.PhysicalConstants.PIVOT_MAX_ANGLE.in(Radians) + ANGLE_TOLERANCE_RAD;
         assertTrue(highInputs.leftPivotMotorAngle.in(Radians) <= maxAllowed, "pivot exceeded max angle");
 
         intakeIO.setPivotMotorPosition(Degrees.of(-50.0));
-        IntakeIOInputsAutoLogged lowInputs = runSimCycles(SLOW_SETTLE_CYCLES);
+        IntakeIO.IntakeIOInputs lowInputs = runSimCycles(SLOW_SETTLE_CYCLES);
         double minAllowed = IntakeConstants.PhysicalConstants.PIVOT_MIN_ANGLE.in(Radians) - ANGLE_TOLERANCE_RAD;
         assertTrue(lowInputs.leftPivotMotorAngle.in(Radians) >= minAllowed, "pivot dropped below min angle");
     }
@@ -134,7 +144,7 @@ class IntakeTest {
         intakeIO.setPivotMotorPosition(Degrees.of(90.0));
         intakeIO.setRollerMotorDutyCycle(1.0);
 
-        IntakeIOInputsAutoLogged inputs = runSimCycles(SLOW_SETTLE_CYCLES);
+        IntakeIO.IntakeIOInputs inputs = runSimCycles(SLOW_SETTLE_CYCLES);
 
         assertAll(
                 () -> assertTrue(Math.abs(inputs.leftPivotMotorVoltage.in(Volts)) <= 12.0 + 1e-6),
@@ -143,11 +153,12 @@ class IntakeTest {
                 () -> assertTrue(Math.abs(inputs.rightRollerMotorVoltage.in(Volts)) <= 12.0 + 1e-6));
     }
 
-    private IntakeIOInputsAutoLogged runSimCycles(int cycles) {
-        IntakeIOInputsAutoLogged inputs = null;
+    private IntakeIO.IntakeIOInputs runSimCycles(int cycles) {
+        IntakeIO.IntakeIOInputs inputs = null;
         for (int i = 0; i < cycles; i++) {
             inputs = intakeIO.updateInputs();
         }
+        assertNotNull(inputs, "runSimCycles must run at least one iteration");
         return inputs;
     }
 
