@@ -4,19 +4,26 @@
 
 package frc.robot;
 
+import static frc.robot.GlobalConstants.Controllers.DRIVER_CONTROLLER;
+
 import java.util.concurrent.ForkJoinPool;
 
+import org.littletonrobotics.junction.LoggedRobot;
+import org.littletonrobotics.junction.Logger;
+import org.littletonrobotics.junction.networktables.NT4Publisher;
+
 import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.Drive.Drive;
+import frc.robot.Intake.Intake;
+import frc.robot.Intake.IntakeStates;
 
 /**
  * The methods in this class are called automatically corresponding to each mode, as described in
  * the TimedRobot documentation. If you change the name of this class or the package after creating
  * this project, you must also update the Main.java file in the project.
  */
-public class Robot extends TimedRobot {
+public class Robot extends LoggedRobot {
 
   /**
    * This function is run when the robot is first started up and should be used for any
@@ -25,6 +32,8 @@ public class Robot extends TimedRobot {
   public Robot() {
     System.out.println(ForkJoinPool.commonPool().getPoolSize()); // Pre-initialize the common ForkJoinPool to avoid jank during operation
     DriverStation.silenceJoystickConnectionWarning(true);
+    Logger.addDataReceiver(new NT4Publisher());
+    Logger.start();
   }
 
   /**
@@ -37,7 +46,15 @@ public class Robot extends TimedRobot {
   @Override
   public void robotPeriodic() {
     CommandScheduler.getInstance().run();
-    Drive.getInstance().periodic();
+    if (DRIVER_CONTROLLER.getAButtonPressed()) {
+      Intake.getInstance().setState(IntakeStates.INTAKING);
+    } else if (DRIVER_CONTROLLER.getBButtonPressed()) {
+      Intake.getInstance().setState(IntakeStates.OUT_IDLE);
+    } else if (DRIVER_CONTROLLER.getXButtonPressed()) {
+      Intake.getInstance().setState(IntakeStates.AGITATING);
+    } else if (DRIVER_CONTROLLER.getYButtonPressed()) {
+      Intake.getInstance().setState(IntakeStates.IN_IDLE);
+    }
   }
 
   /**

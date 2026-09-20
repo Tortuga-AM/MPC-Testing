@@ -12,6 +12,7 @@ import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 
 public class GlobalConstants {
+	public static final boolean TUNE_MODE = true;
 
 	public static final int VOLTS = 12;
 
@@ -26,7 +27,6 @@ public class GlobalConstants {
 
 	public enum RobotMode {
 		REAL,
-		TESTING,
 		SIM,
 	}
 

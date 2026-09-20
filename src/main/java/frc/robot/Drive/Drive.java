@@ -95,7 +95,7 @@ public class Drive extends Subsystem<DriveStates> {
     private Drive() {
         super("Drive", DriveStates.MANUAL);
         this.driveIO = switch (GlobalConstants.ROBOT_MODE) {
-            case REAL, TESTING -> new DriveIOReal();
+            case REAL -> new DriveIOReal();
             case SIM -> new DriveIOSim();
         };
         headingController.enableContinuousInput(-Math.PI, Math.PI);
