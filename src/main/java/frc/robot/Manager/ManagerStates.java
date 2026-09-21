@@ -1,9 +1,12 @@
 package frc.robot.Manager;
 
+import frc.robot.Intake.IntakeStates;
 import org.team7525.subsystem.SubsystemStates;
 
-import frc.robot.Intake.IntakeStates;
-
+/**
+ * ManagerStates is an enum that defines the different states of the Manager subsystem.
+ * Each state is associated with a corresponding IntakeState, which represents the state of the Intake subsystem.
+ */
 public enum ManagerStates implements SubsystemStates {
     IN_IDLE(IntakeStates.IN_IDLE),
     OUT_IDLE(IntakeStates.OUT_IDLE),

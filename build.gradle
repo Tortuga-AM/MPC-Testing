@@ -1,11 +1,43 @@
 plugins {
     id "java"
     id "edu.wpi.first.GradleRIO" version "2026.2.1"
+    id 'com.diffplug.spotless' version '6.11.0'
+    id 'checkstyle'
 }
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+}
+
+spotless {
+    java {
+        target fileTree('.') {
+            include '**/*.java'
+            exclude '**/build/**', '**/build-*/**'
+        }
+        toggleOffOn()
+        prettier([
+            'prettier': '2.8.8', 
+            'prettier-plugin-java': '2.2.0'
+        ]).config([
+            'parser': 'java',
+            'printWidth': 120, 
+            'tabWidth': 4,
+        ])
+        removeUnusedImports()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+checkstyle {
+    toolVersion = '10.12.4'
+
+    // Set to 'true' to just print warnings to the terminal without blocking the deploy.
+    // Set to 'false' to intentionally fail the build/deploy if bad practices are found.
+    ignoreFailures = true 
+    showViolations = true
 }
 
 def ROBOT_MAIN_CLASS = "frc.robot.Main"
@@ -122,3 +154,7 @@ wpi.java.configureTestTasks(test)
 tasks.withType(JavaCompile) {
     options.compilerArgs.add '-XDstringConcat=inline'
 }
+
+// Automatically format and lint before compiling (which runs on build and deploy)
+compileJava.dependsOn 'spotlessApply'
+assemble.dependsOn 'checkstyleMain'

@@ -1,0 +1,26 @@
+# Add 'vision' label if files in the vision folder change
+vision:
+  - changed-files:
+    - any-glob-to-any-file: 'src/main/java/frc/robot/vision/**/*'
+
+# Add 'subsystem' label for any subsystem changes
+subsystem:
+  - changed-files:
+    - any-glob-to-any-file: 'src/main/java/frc/robot/subsystems/**/*'
+
+# Add 'command' label for any command changes
+command:
+  - changed-files:
+    - any-glob-to-any-file: 'src/main/java/frc/robot/commands/**/*'
+
+# Add 'infrastructure' label if Gradle or CI files change
+infrastructure:
+  - changed-files:
+    - any-glob-to-any-file: 
+      - 'build.gradle'
+      - '.github/**/*'
+      
+# Add 'testing' label if test files change
+testing:
+  - changed-files:
+    - any-glob-to-any-file: 'src/test/java/frc/robot/**/*'

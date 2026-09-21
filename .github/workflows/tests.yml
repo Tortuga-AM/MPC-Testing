@@ -1,0 +1,41 @@
+name: Tests and Checkstyle
+
+on:
+  push:
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle caching
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compile and Run Checkstyle
+        run: ./gradlew assemble checkstyleMain
+
+      - name: Run JUnit Tests
+        run: ./gradlew test
+
+      - name: Publish Test Report
+        uses: dorny/test-reporter@v1
+        # Always run this step, even if the tests above fail
+        if: success() || failure() 
+        with:
+          name: JUnit Test Results
+          path: build/test-results/test/*.xml
+          reporter: java-junit
+          fail-on-error: true

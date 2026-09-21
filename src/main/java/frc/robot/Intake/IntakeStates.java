@@ -1,21 +1,26 @@
 package frc.robot.Intake;
 
 import static edu.wpi.first.units.Units.Degrees;
-import java.util.function.Consumer;
+
 import edu.wpi.first.units.measure.Angle;
+import java.util.function.Consumer;
 import org.team7525.subsystem.SubsystemStates;
 
+/**
+ * IntakeStates is an enum that defines the different states of the Intake subsystem.
+ * Each state is associated with a specific intake angle and roller speed, and can have custom behaviors for entering, running, and exiting the state.
+ */
 public enum IntakeStates implements SubsystemStates {
     IN_IDLE("In Idle", Degrees.of(0), 0.0),
     OUT_IDLE("Out Idle", Degrees.of(90), 0.0),
     INTAKING("Intaking", Degrees.of(90), 1.0),
     AGITATING(
-        "Agitating", 
-        Degrees.of(45), 
-        0.5, 
+        "Agitating",
+        Degrees.of(45),
+        0.5,
         subsystem -> System.out.println("Starting agitator!"), // onEnter
         subsystem -> subsystem.agitationBehavior(), // runState
-        subsystem -> System.out.println("Ending agitator!")    // onExit
+        subsystem -> System.out.println("Ending agitator!") // onExit
     ),
     // -- BACKUP/FIXING STATES -- //
     OUTTAKING("Outtaking", Degrees.of(90), -1.0),
@@ -37,10 +42,14 @@ public enum IntakeStates implements SubsystemStates {
         this.runState = subsystem -> subsystem.defaultBehavior();
     }
 
-    IntakeStates(String stateString, Angle intakeAngle, Double intakeSpeed, 
-                 Consumer<Intake> onEnter, 
-                 Consumer<Intake> runState, 
-                 Consumer<Intake> onExit) {
+    IntakeStates(
+        String stateString,
+        Angle intakeAngle,
+        Double intakeSpeed,
+        Consumer<Intake> onEnter,
+        Consumer<Intake> runState,
+        Consumer<Intake> onExit
+    ) {
         this.stateString = stateString;
         this.intakeAngle = intakeAngle;
         this.intakeSpeed = intakeSpeed;
@@ -51,7 +60,15 @@ public enum IntakeStates implements SubsystemStates {
         this.onExit = onExit;
     }
 
-    public void onEnter(Intake subsystem) { onEnter.accept(subsystem); }
-    public void runState(Intake subsystem) { runState.accept(subsystem); }
-    public void onExit(Intake subsystem) { onExit.accept(subsystem); }
+    public void onEnter(Intake subsystem) {
+        onEnter.accept(subsystem);
+    }
+
+    public void runState(Intake subsystem) {
+        runState.accept(subsystem);
+    }
+
+    public void onExit(Intake subsystem) {
+        onExit.accept(subsystem);
+    }
 }

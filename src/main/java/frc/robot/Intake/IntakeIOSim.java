@@ -1,21 +1,26 @@
 package frc.robot.Intake;
 
-import com.ctre.phoenix6.sim.TalonFXSimState;
-import com.ctre.phoenix6.sim.TalonFXSimState.MotorType;
-
-import edu.wpi.first.math.system.plant.DCMotor;
-import edu.wpi.first.math.system.plant.LinearSystemId;
-import edu.wpi.first.math.util.Units;
-import edu.wpi.first.wpilibj.simulation.FlywheelSim;
-import edu.wpi.first.wpilibj.simulation.SingleJointedArmSim;
-
 import static edu.wpi.first.units.Units.Amps;
 import static edu.wpi.first.units.Units.Radians;
 import static edu.wpi.first.units.Units.RadiansPerSecond;
 import static edu.wpi.first.units.Units.Volts;
 import static frc.robot.Intake.IntakeConstants.*;
 
+import com.ctre.phoenix6.sim.TalonFXSimState;
+import com.ctre.phoenix6.sim.TalonFXSimState.MotorType;
+import edu.wpi.first.math.system.plant.DCMotor;
+import edu.wpi.first.math.system.plant.LinearSystemId;
+import edu.wpi.first.math.util.Units;
+import edu.wpi.first.wpilibj.simulation.FlywheelSim;
+import edu.wpi.first.wpilibj.simulation.SingleJointedArmSim;
+
+/**
+ * IntakeIOSim is a simulation implementation of the IntakeIO interface.
+ * It simulates the behavior of the intake system, including the pivot and roller motors,
+ * using physics-based models for the flywheel and single-jointed arm.
+ */
 public class IntakeIOSim extends IntakeIOReal {
+
     private FlywheelSim rollerSim;
     private SingleJointedArmSim pivotSim;
     private TalonFXSimState leftPivotMotorSim;
@@ -24,34 +29,40 @@ public class IntakeIOSim extends IntakeIOReal {
     private TalonFXSimState rightRollerMotorSim;
     private IntakeIOInputsAutoLogged inputs;
 
+    /**
+     * Constructs an IntakeIOSim instance, initializing the simulation models for the pivot and roller motors.
+     * It sets up the flywheel and single-jointed arm simulations with appropriate parameters based on the physical constants.
+     */
     public IntakeIOSim() {
         super();
         inputs = new IntakeIOInputsAutoLogged();
-        rollerSim = new FlywheelSim(
-            LinearSystemId.createFlywheelSystem(
+        rollerSim =
+            new FlywheelSim(
+                LinearSystemId.createFlywheelSystem(
+                    DCMotor.getKrakenX60(2),
+                    PhysicalConstants.ROLLER_MOI,
+                    PhysicalConstants.ROLLER_GEAR_RATIO
+                ),
                 DCMotor.getKrakenX60(2),
-                PhysicalConstants.ROLLER_MOI,
-                PhysicalConstants.ROLLER_GEAR_RATIO
-            ),
-            DCMotor.getKrakenX60(2),
-            PhysicalConstants.ROLLER_STD_DEV
-        );
-        pivotSim = new SingleJointedArmSim(
-            LinearSystemId.createSingleJointedArmSystem(
+                PhysicalConstants.ROLLER_STD_DEV
+            );
+        pivotSim =
+            new SingleJointedArmSim(
+                LinearSystemId.createSingleJointedArmSystem(
+                    DCMotor.getKrakenX60(2),
+                    PhysicalConstants.PIVOT_MOI,
+                    PhysicalConstants.PIVOT_GEAR_RATIO
+                ),
                 DCMotor.getKrakenX60(2),
-                PhysicalConstants.PIVOT_MOI,
-                PhysicalConstants.PIVOT_GEAR_RATIO
-            ),
-            DCMotor.getKrakenX60(2),
-            PhysicalConstants.PIVOT_GEAR_RATIO,
-            PhysicalConstants.PIVOT_ARM_LENGTH,
-            PhysicalConstants.PIVOT_MIN_ANGLE.in(Radians),
-            PhysicalConstants.PIVOT_MAX_ANGLE.in(Radians),
-            true,
-            PhysicalConstants.PIVOT_MIN_ANGLE.in(Radians),
-            PhysicalConstants.PIVOT_STD_DEV,
-            PhysicalConstants.PIVOT_STD_DEV
-        );
+                PhysicalConstants.PIVOT_GEAR_RATIO,
+                PhysicalConstants.PIVOT_ARM_LENGTH,
+                PhysicalConstants.PIVOT_MIN_ANGLE.in(Radians),
+                PhysicalConstants.PIVOT_MAX_ANGLE.in(Radians),
+                true,
+                PhysicalConstants.PIVOT_MIN_ANGLE.in(Radians),
+                PhysicalConstants.PIVOT_STD_DEV,
+                PhysicalConstants.PIVOT_STD_DEV
+            );
         leftPivotMotorSim = new TalonFXSimState(leftPivotMotor);
         rightPivotMotorSim = new TalonFXSimState(rightPivotMotor);
         leftRollerMotorSim = new TalonFXSimState(leftRollerMotor);
@@ -74,10 +85,18 @@ public class IntakeIOSim extends IntakeIOReal {
         pivotSim.update(0.02);
         leftRollerMotorSim.setRotorVelocity(rollerSim.getAngularVelocity().times(PhysicalConstants.ROLLER_GEAR_RATIO));
         rightRollerMotorSim.setRotorVelocity(rollerSim.getAngularVelocity().times(PhysicalConstants.ROLLER_GEAR_RATIO));
-        leftPivotMotorSim.setRawRotorPosition(Units.radiansToRotations(pivotSim.getAngleRads() * PhysicalConstants.PIVOT_GEAR_RATIO));
-        rightPivotMotorSim.setRawRotorPosition(Units.radiansToRotations(pivotSim.getAngleRads() * PhysicalConstants.PIVOT_GEAR_RATIO));
-        leftPivotMotorSim.setRotorVelocity(Units.radiansToRotations(pivotSim.getVelocityRadPerSec() * PhysicalConstants.PIVOT_GEAR_RATIO));
-        rightPivotMotorSim.setRotorVelocity(Units.radiansToRotations(pivotSim.getVelocityRadPerSec() * PhysicalConstants.PIVOT_GEAR_RATIO));
+        leftPivotMotorSim.setRawRotorPosition(
+            Units.radiansToRotations(pivotSim.getAngleRads() * PhysicalConstants.PIVOT_GEAR_RATIO)
+        );
+        rightPivotMotorSim.setRawRotorPosition(
+            Units.radiansToRotations(pivotSim.getAngleRads() * PhysicalConstants.PIVOT_GEAR_RATIO)
+        );
+        leftPivotMotorSim.setRotorVelocity(
+            Units.radiansToRotations(pivotSim.getVelocityRadPerSec() * PhysicalConstants.PIVOT_GEAR_RATIO)
+        );
+        rightPivotMotorSim.setRotorVelocity(
+            Units.radiansToRotations(pivotSim.getVelocityRadPerSec() * PhysicalConstants.PIVOT_GEAR_RATIO)
+        );
 
         // Update the inputs with simulated values
         inputs.leftPivotMotorCurrent = Amps.of(leftPivotMotorSim.getSupplyCurrent());
@@ -99,4 +118,15 @@ public class IntakeIOSim extends IntakeIOReal {
         return inputs;
     }
 
+    @Override
+    public void close() throws Exception {
+        super.close();
+        rollerSim = null;
+        pivotSim = null;
+        leftPivotMotorSim = null;
+        rightPivotMotorSim = null;
+        leftRollerMotorSim = null;
+        rightRollerMotorSim = null;
+        inputs = null;
+    }
 }
