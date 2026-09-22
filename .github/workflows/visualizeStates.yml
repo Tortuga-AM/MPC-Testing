@@ -2,6 +2,8 @@ name: Visualize States
 
 on:
   push:
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 jobs:
   generate-graph:
@@ -38,20 +40,26 @@ jobs:
         path: state_machine.png
 
     - name: Comment on PR
-      uses: actions/github-script@v6
-      with:
-        script: |
-          const prNumber = context.payload.pull_request.number;
-          const exitCode = Number(process.env.EXIT_CODE);
-          const commentBody = exitCode === 0
-              ? "✅ State machine graph generated and uploaded."
-              : "⚠️ Something went wrong while generating the state machine graph.";
+        uses: actions/github-script@v7
+        env:
+          EXIT_CODE: ${{ steps.run-script.outputs.exit_code }}
+        with:
+          script: |
+            const prNumber = context.payload.pull_request?.number;
 
-          github.rest.issues.createComment({
-            issue_number: prNumber,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: commentBody
-          })
-      env:
-        EXIT_CODE: ${{ steps.run-script.outputs.exit_code }}
+            if (!prNumber) {
+              core.info('No pull request is associated with this event; skipping comment.');
+              return;
+            }
+
+            const exitCode = Number(process.env.EXIT_CODE);
+            const commentBody = exitCode === 0
+              ? '✅ State machine graph generated and uploaded.'
+              : '⚠️ Something went wrong while generating the state machine graph.';
+
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: commentBody
+            });
