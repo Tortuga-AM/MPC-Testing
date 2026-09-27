@@ -27,6 +27,8 @@ import frc.robot.Drive.AutoAlign.TrajoPlotPro;
 import frc.robot.Drive.AutoAlign.Zone;
 import frc.robot.Drive.AutoAlign.TrajoPlotPro.RobotConfig;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -102,6 +104,7 @@ public class Drive extends Subsystem<DriveStates> {
         
         addObstacle(4.5, 5.5); 
         rectObstacles.add(new TrajoPlotPro.RectObstacle(4.7, 4.12, 1.2, 5));
+        rectObstacles.add(new TrajoPlotPro.RectObstacle(12.5, 4.12, 1.2, 5));
     }
 
     // =========================================================================
@@ -325,8 +328,8 @@ public class Drive extends Subsystem<DriveStates> {
         ChassisSpeeds currentFieldAcceleration = getCurrentFieldAcceleration(currentRobotSpeeds);
 
         Trajectory<SwerveSample> prevTraj = (activeTrajectory != null && isFollowingPath) ? activeTrajectory : null;
-
-        CompletableFuture.supplyAsync(() -> {
+        Instant start = Instant.now();
+        CompletableFuture<Void> future = CompletableFuture.supplyAsync(() -> {
             List<TrajoPlotPro.TrajectoryPoint> trajectory = solver.solve(
                 startPose, currentFieldSpeeds, currentFieldAcceleration, goalPose, 
                 waypoints, staticObstacles, rectObstacles, 0.45, 0.05, prevTraj 
@@ -354,6 +357,18 @@ public class Drive extends Subsystem<DriveStates> {
             isGenerating = false;
             return null;
         });
+
+        CompletableFuture<Void> timedFuture = future.whenComplete((result, exception) -> {
+            Instant end = Instant.now();
+            long timeElapsed = Duration.between(start, end).toMillis();
+            System.out.println("Execution time: " + timeElapsed + " ms");
+            
+            if (exception != null) {
+                System.err.println("Task failed with: " + exception.getMessage());
+            }
+        });
+        timedFuture.join();
+
     }
 
     private double applyStaticFrictionCompenation(double velocity) {

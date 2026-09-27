@@ -1,0 +1,110 @@
+=== TrajoPlotPro.plan() @ 2026-09-22T22:29:57.780804 ===
+Environment: 3 keep-out primitives (1 circle(s), 2 rectangle(s) as single superellipses).
+Geometric route: 4 point(s), 7.451 m.
+NLP setup: N=54, estT=2.279 s, maxV=4.279, maxA=7.960, maxOmega=10.774, maxAlpha=40.447, Fmod=153.543 N.
+  'strict': N=54, samples/interval=2, obstacle constraints=327, vars=763
+  solver exit (strict): LINE_SEARCH_FAILED
+  attempt 'strict' took 171.352 ms.
+  'relaxed': N=54, samples/interval=2, obstacle constraints=327, vars=763
+  solver exit (relaxed): LINE_SEARCH_FAILED
+  attempt 'relaxed' took 86.695 ms.
+  'dense': N=107, samples/interval=4, obstacle constraints=1287, vars=1505
+  solver exit (dense): LINE_SEARCH_FAILED
+  attempt 'dense' took 179.263 ms.
+NLP produced no validated trajectory; using geometric/trapezoidal fallback.
+Result: GEOMETRIC_FALLBACK, 95 point(s).
+=== TrajoPlotPro.plan() @ 2026-09-22T22:30:04.808600 ===
+Environment: 3 keep-out primitives (1 circle(s), 2 rectangle(s) as single superellipses).
+Geometric route: 6 point(s), 16.663 m.
+NLP setup: N=120, estT=4.432 s, maxV=4.279, maxA=7.960, maxOmega=10.774, maxAlpha=40.447, Fmod=153.543 N.
+  'strict': N=120, samples/interval=2, obstacle constraints=723, vars=1687
+  solver exit (strict): LINE_SEARCH_FAILED
+  attempt 'strict' took 718.858 ms.
+  'relaxed': N=120, samples/interval=2, obstacle constraints=723, vars=1687
+  solver exit (relaxed): LINE_SEARCH_FAILED
+  attempt 'relaxed' took 505.607 ms.
+  'dense': N=160, samples/interval=4, obstacle constraints=1923, vars=2247
+  solver exit (dense): LINE_SEARCH_FAILED
+  attempt 'dense' took 508.743 ms.
+NLP produced no validated trajectory; using geometric/trapezoidal fallback.
+Result: GEOMETRIC_FALLBACK, 210 point(s).
+=== TrajoPlotPro.plan() @ 2026-09-22T22:30:26.010462 ===
+Environment: 3 keep-out primitives (1 circle(s), 2 rectangle(s) as single superellipses).
+Geometric route: 3 point(s), 12.103 m.
+NLP setup: N=87, estT=3.366 s, maxV=4.279, maxA=7.960, maxOmega=10.774, maxAlpha=40.447, Fmod=153.543 N.
+  'strict': N=87, samples/interval=2, obstacle constraints=525, vars=1225
+  solver exit (strict): LINE_SEARCH_FAILED
+  attempt 'strict' took 272.158 ms.
+  'relaxed': N=87, samples/interval=2, obstacle constraints=525, vars=1225
+  solver exit (relaxed): LINE_SEARCH_FAILED
+  attempt 'relaxed' took 228.240 ms.
+  'dense': N=160, samples/interval=4, obstacle constraints=1923, vars=2247
+  solver exit (dense): LINE_SEARCH_FAILED
+  attempt 'dense' took 449.267 ms.
+NLP produced no validated trajectory; using geometric/trapezoidal fallback.
+Result: GEOMETRIC_FALLBACK, 153 point(s).
+=== TrajoPlotPro.plan() @ 2026-09-22T22:30:36.072995 ===
+Environment: 3 keep-out primitives (1 circle(s), 2 rectangle(s) as single superellipses).
+Geometric route: 6 point(s), 16.773 m.
+NLP setup: N=120, estT=4.458 s, maxV=4.279, maxA=7.960, maxOmega=10.774, maxAlpha=40.447, Fmod=153.543 N.
+  'strict': N=120, samples/interval=2, obstacle constraints=723, vars=1687
+  solver exit (strict): LINE_SEARCH_FAILED
+  attempt 'strict' took 578.837 ms.
+  'relaxed': N=120, samples/interval=2, obstacle constraints=723, vars=1687
+  solver exit (relaxed): LINE_SEARCH_FAILED
+  attempt 'relaxed' took 466.330 ms.
+  'dense': N=160, samples/interval=4, obstacle constraints=1923, vars=2247
+  solver exit (dense): LINE_SEARCH_FAILED
+  attempt 'dense' took 868.679 ms.
+NLP produced no validated trajectory; using geometric/trapezoidal fallback.
+Result: GEOMETRIC_FALLBACK, 211 point(s).
+=== TrajoPlotPro.plan() @ 2026-09-22T22:31:03.852499 ===
+Environment: 3 keep-out primitives (1 circle(s), 2 rectangle(s) as single superellipses).
+NOTE: start pose moved 1.098 m to clear an obstacle or the field boundary.
+Geometric route: 3 point(s), 3.004 m.
+NLP setup: N=22, estT=1.240 s, maxV=4.279, maxA=7.960, maxOmega=10.774, maxAlpha=40.447, Fmod=153.543 N.
+  'strict': N=22, samples/interval=2, obstacle constraints=135, vars=315
+  solver exit (strict): LINE_SEARCH_FAILED
+  attempt 'strict' took 41.305 ms.
+  'relaxed': N=22, samples/interval=2, obstacle constraints=135, vars=315
+  solver exit (relaxed): LINE_SEARCH_FAILED
+  attempt 'relaxed' took 20.416 ms.
+  'dense': N=43, samples/interval=4, obstacle constraints=519, vars=609
+  solver exit (dense): LINE_SEARCH_FAILED
+  attempt 'dense' took 48.474 ms.
+NLP produced no validated trajectory; using geometric/trapezoidal fallback.
+Result: GEOMETRIC_FALLBACK, 39 point(s).
+=== TrajoPlotPro.plan() @ 2026-09-22T22:31:08.509018 ===
+Environment: 3 keep-out primitives (1 circle(s), 2 rectangle(s) as single superellipses).
+NOTE: start pose moved 0.736 m to clear an obstacle or the field boundary.
+NOTE: start is inside a conservative keep-out box; the first leg is an escape segment and is not certified clear.
+Geometric route: 5 point(s), 11.929 m [endpoint leg unvalidated].
+NLP setup: N=86, estT=3.071 s, maxV=4.279, maxA=7.960, maxOmega=10.774, maxAlpha=40.447, Fmod=153.543 N.
+  'strict': N=86, samples/interval=2, obstacle constraints=519, vars=1211
+  solver exit (strict): LINE_SEARCH_FAILED
+  attempt 'strict' took 218.369 ms.
+  'relaxed': N=86, samples/interval=2, obstacle constraints=519, vars=1211
+  solver exit (relaxed): LINE_SEARCH_FAILED
+  attempt 'relaxed' took 330.641 ms.
+  'dense': N=160, samples/interval=4, obstacle constraints=1923, vars=2247
+  solver exit (dense): LINE_SEARCH_FAILED
+  attempt 'dense' took 454.265 ms.
+NLP failed and the geometric route has an unvalidated endpoint leg; refusing to emit it as a fallback.
+Result: STATIONARY, 2 point(s).
+=== TrajoPlotPro.plan() @ 2026-09-22T22:31:17.731114 ===
+Environment: 3 keep-out primitives (1 circle(s), 2 rectangle(s) as single superellipses).
+NOTE: start pose moved 0.897 m to clear an obstacle or the field boundary.
+NOTE: start is inside a conservative keep-out box; the first leg is an escape segment and is not certified clear.
+Geometric route: 3 point(s), 5.554 m [endpoint leg unvalidated].
+NLP setup: N=40, estT=1.568 s, maxV=4.279, maxA=7.960, maxOmega=10.774, maxAlpha=40.447, Fmod=153.543 N.
+  'strict': N=40, samples/interval=2, obstacle constraints=243, vars=567
+  solver exit (strict): LINE_SEARCH_FAILED
+  attempt 'strict' took 88.531 ms.
+  'relaxed': N=40, samples/interval=2, obstacle constraints=243, vars=567
+  solver exit (relaxed): LINE_SEARCH_FAILED
+  attempt 'relaxed' took 51.713 ms.
+  'dense': N=80, samples/interval=4, obstacle constraints=963, vars=1127
+  solver exit (dense): LINE_SEARCH_FAILED
+  attempt 'dense' took 132.326 ms.
+NLP failed and the geometric route has an unvalidated endpoint leg; refusing to emit it as a fallback.
+Result: STATIONARY, 2 point(s).

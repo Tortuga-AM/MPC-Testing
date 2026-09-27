@@ -1,16 +1,16 @@
 package frc.robot.Drive.AutoAlign;
 
 import edu.wpi.first.math.geometry.Translation2d;
+import frc.robot.Drive.AutoAlign.TrajoPlotPro.ConstraintCirc;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.PriorityQueue;
 
-import frc.robot.Drive.AutoAlign.TrajoPlotPro.RectObstacle;
-
 public class AStarPathfind {
 
-    private static final double RESOLUTION = 0.10; // Increased to 20cm for faster grid generation
+    private static final double RESOLUTION = 0.15; // Kept large for rapid solves
     private static final double FIELD_LENGTH = 16.54;
     private static final double FIELD_WIDTH = 8.21;
     private static final int GRID_WIDTH = (int) Math.ceil(FIELD_LENGTH / RESOLUTION);
@@ -35,11 +35,7 @@ public class AStarPathfind {
         }
     }
 
-    public static List<Translation2d> findPath(Translation2d start, Translation2d goal, 
-                                               List<Translation2d> circularObstacles, 
-                                               List<RectObstacle> rectObstacles, 
-                                               double avoidanceRadius) {
-        
+    public static List<Translation2d> findPath(Translation2d start, Translation2d goal, List<ConstraintCirc> env) {
         int startX = clampGridX((int) (start.getX() / RESOLUTION));
         int startY = clampGridY((int) (start.getY() / RESOLUTION));
         int goalX = clampGridX((int) (goal.getX() / RESOLUTION));
@@ -78,21 +74,19 @@ public class AStarPathfind {
 
                 if (nx < 0 || nx >= GRID_WIDTH || ny < 0 || ny >= GRID_HEIGHT) continue;
                 if (closedSet[nx][ny]) continue;
-                if (!isWalkable(nx, ny, circularObstacles, rectObstacles, avoidanceRadius)) continue;
+                if (!isWalkable(nx, ny, env)) continue;
 
                 Node neighbor = nodes[nx][ny];
                 
-                // THETA* ANY-ANGLE LOGIC: Check Line of Sight to Grandparent
-                if (current.parent != null && hasLineOfSight(current.parent.x, current.parent.y, nx, ny, circularObstacles, rectObstacles, avoidanceRadius)) {
+                if (current.parent != null && hasLineOfSight(current.parent.x, current.parent.y, nx, ny, env)) {
                     double costToNeighbor = current.parent.gCost + getHeuristic(current.parent.x, current.parent.y, nx, ny);
                     if (costToNeighbor < neighbor.gCost) {
                         neighbor.gCost = costToNeighbor;
                         neighbor.hCost = getHeuristic(nx, ny, goalX, goalY);
-                        neighbor.parent = current.parent; // Bypass the current node!
+                        neighbor.parent = current.parent; 
                         if (!openSet.contains(neighbor)) openSet.add(neighbor);
                     }
                 } else {
-                    // Standard A* Step
                     double moveCost = (dir[0] != 0 && dir[1] != 0) ? 1.414 : 1.0;
                     double tentativeGCost = current.gCost + moveCost;
                     if (tentativeGCost < neighbor.gCost) {
@@ -105,7 +99,7 @@ public class AStarPathfind {
             }
         }
 
-        if (targetNode == null) return new ArrayList<>(List.of(start, goal));
+        if (targetNode == null) return List.of();
 
         List<Translation2d> rawPath = new ArrayList<>();
         Node curr = targetNode;
@@ -118,55 +112,43 @@ public class AStarPathfind {
         rawPath.set(0, start);
         rawPath.set(rawPath.size() - 1, goal);
 
-        return rawPath; // No smoothing pass needed, Theta* handles it natively!
+        return rawPath; 
     }
 
-    private static boolean isWalkable(int gx, int gy, List<Translation2d> circs, List<RectObstacle> rects, double radius) {
+    private static boolean isWalkable(int gx, int gy, List<ConstraintCirc> env) {
         double px = gx * RESOLUTION;
         double py = gy * RESOLUTION;
 
-        if (px < radius || px > FIELD_LENGTH - radius || py < radius || py > FIELD_WIDTH - radius) return false;
+        if (px < 0.1 || px > FIELD_LENGTH - 0.1 || py < 0.1 || py > FIELD_WIDTH - 0.1) return false;
 
-        if (circs != null) {
-            for (Translation2d obs : circs) {
-                if (Math.hypot(px - obs.getX(), py - obs.getY()) < radius) return false;
-            }
-        }
-        if (rects != null) {
-            for (RectObstacle rect : rects) {
-                double hW = (rect.width() / 2.0) + radius;
-                double hH = (rect.height() / 2.0) + radius;
-                if (px > rect.x() - hW && px < rect.x() + hW && py > rect.y() - hH && py < rect.y() + hH) return false;
-            }
+        for (ConstraintCirc obs : env) {
+            double dx = px - obs.x();
+            double dy = py - obs.y();
+            if (dx * dx + dy * dy <= obs.rSq()) return false;
         }
         return true;
     }
 
-    private static boolean hasLineOfSight(int x1, int y1, int x2, int y2, List<Translation2d> circs, List<RectObstacle> rects, double radius) {
+    private static boolean hasLineOfSight(int x1, int y1, int x2, int y2, List<ConstraintCirc> env) {
+        if (x1 == x2 && y1 == y2) return true;
+        
         double px1 = x1 * RESOLUTION; double py1 = y1 * RESOLUTION;
         double px2 = x2 * RESOLUTION; double py2 = y2 * RESOLUTION;
         
         double dist = Math.hypot(px2 - px1, py2 - py1);
-        int steps = (int) Math.ceil(dist / (RESOLUTION / 2.0)); 
+        int steps = Math.max(1, (int) Math.ceil(dist / (RESOLUTION / 2.0))); 
         
         for (int i = 0; i <= steps; i++) {
             double t = (double) i / steps;
             double ptX = px1 + (px2 - px1) * t;
             double ptY = py1 + (py2 - py1) * t;
             
-            if (ptX < radius || ptX > FIELD_LENGTH - radius || ptY < radius || ptY > FIELD_WIDTH - radius) return false;
+            if (ptX < 0.1 || ptX > FIELD_LENGTH - 0.1 || ptY < 0.1 || ptY > FIELD_WIDTH - 0.1) return false;
             
-            if (circs != null) {
-                for (Translation2d obs : circs) {
-                    if (Math.hypot(ptX - obs.getX(), ptY - obs.getY()) < radius) return false;
-                }
-            }
-            if (rects != null) {
-                for (RectObstacle rect : rects) {
-                    double hW = (rect.width() / 2.0) + radius;
-                    double hH = (rect.height() / 2.0) + radius;
-                    if (ptX > rect.x() - hW && ptX < rect.x() + hW && ptY > rect.y() - hH && ptY < rect.y() + hH) return false;
-                }
+            for (ConstraintCirc obs : env) {
+                double dx = ptX - obs.x();
+                double dy = ptY - obs.y();
+                if (dx * dx + dy * dy <= obs.rSq()) return false;
             }
         }
         return true;
