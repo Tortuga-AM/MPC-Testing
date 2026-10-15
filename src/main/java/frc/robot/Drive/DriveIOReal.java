@@ -4,9 +4,12 @@ import static frc.robot.Drive.TunerConstants.*;
 
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.swerve.SwerveRequest;
+import com.ctre.phoenix6.swerve.SwerveModule.ModuleRequest;
+
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import frc.robot.Drive.TunerConstants.TunerSwerveDrivetrain;
@@ -68,5 +71,21 @@ public class DriveIOReal implements DriveIO {
 			motors[i] = drivetrain.getModules()[i].getSteerMotor();
 		}
 		return motors;
+	}
+
+	@Override
+	public SwerveModuleState[] getModuleStates() {
+		SwerveModuleState[] states = new SwerveModuleState[drivetrain.getModules().length];
+		for (int i = 0; i < drivetrain.getModules().length; i++) {
+			states[i] = drivetrain.getModules()[i].getCurrentState();
+		}
+		return states;
+	}
+
+	@Override
+	public void setModuleStates(SwerveModuleState[] states) {
+		for (int i = 0; i < drivetrain.getModules().length; i++) {
+			drivetrain.getModules()[i].apply(new ModuleRequest().withState(states[i]));
+		}
 	}
 }

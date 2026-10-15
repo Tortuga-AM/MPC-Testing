@@ -4,12 +4,18 @@
 
 package frc.robot;
 
+import static frc.robot.GlobalConstants.Controllers.DRIVER_CONTROLLER;
+
 import java.util.concurrent.ForkJoinPool;
 
+import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.Drive.Drive;
+import frc.robot.Drive.AutoAlign.AutoAlign;
+import frc.robot.Drive.AutoAlign.AutoAlignStates;
 
 /**
  * The methods in this class are called automatically corresponding to each mode, as described in
@@ -17,6 +23,7 @@ import frc.robot.Drive.Drive;
  * this project, you must also update the Main.java file in the project.
  */
 public class Robot extends TimedRobot {
+  public static boolean isBlue;
 
   /**
    * This function is run when the robot is first started up and should be used for any
@@ -38,6 +45,22 @@ public class Robot extends TimedRobot {
   public void robotPeriodic() {
     CommandScheduler.getInstance().run();
     Drive.getInstance().periodic();
+    AutoAlign.getInstance().periodic();    
+    if (DRIVER_CONTROLLER.getXButtonPressed()) {
+      if (AutoAlign.getInstance().getState() != AutoAlignStates.FOLLOWING_TRAJECTORY) {
+            AutoAlign.getInstance().alignToPose(
+                new Pose2d(
+                    1,
+                    1,
+                    Rotation2d.fromDegrees(180.0)
+                ),
+                0
+            );
+      } else {
+            AutoAlign.getInstance().cancel();
+      }
+    } 
+    DriverStation.getAlliance().ifPresent(alliance -> isBlue = alliance == DriverStation.Alliance.Blue);
   }
 
   /**

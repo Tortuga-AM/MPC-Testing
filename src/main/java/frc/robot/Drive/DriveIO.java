@@ -2,6 +2,7 @@ package frc.robot.Drive;
 
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.swerve.SwerveRequest;
+
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation3d;
@@ -39,4 +40,8 @@ public interface DriveIO {
 	public TalonFX[] getDriveMotors();
 
 	public TalonFX[] getSteerMotors();
+
+	public abstract SwerveModuleState[] getModuleStates();
+
+	public abstract void setModuleStates(SwerveModuleState[] states);
 }
